@@ -34,6 +34,7 @@ import glob
 import csv
 
 from pathlib import Path
+import json
 
 
 
@@ -42,6 +43,10 @@ import random
 
 
 # print("USING pytorch VERSION: ", torch.__version__)
+
+# %%
+from ray import tune
+from ray.tune.schedulers import ASHAScheduler
 
 # %% [markdown]
 # ## Define Constants and Hyperparams
@@ -52,6 +57,7 @@ DATA_PATH = Path("Data/")
 SANITY_PATH = Path("Sanity_Checks/")
 MODEL_OUTPUT_PATH = Path("Model_Outputs/")
 MODEL_PATH = Path("Models/")
+TMP_PATH = Path("TMP/")
 CSV_HEADER = [
                 "FL A1 DF 1",
                 "FL A1 DF 2",
@@ -83,9 +89,8 @@ CSV_HEADER = [
                 "SP A2 DF 2",
             ]
 
-epochs = 5
+AVGS_KEY = "canter"
 
-        
 
 # %% [markdown]
 # ## Define a pytorch Dataset object to contain the training and testing data
@@ -211,31 +216,32 @@ def train_batch(model, x, y, optimizer, loss_fn):
     # Calling the step function on an Optimizer makes an update to its
     # parameters
     optimizer.step()
-
     
-
     return loss.data.item()
 
 
-def train(model, loader, optimizer, loss_fn, epochs=5):
+def train(model, loader, optimizer, loss_fn, config):
     losses = list()
 
+    correct = 0
+    total = 0
+
     batch_index = 0
-    for e in range(epochs):
-        for x, y in loader:
-            loss = train_batch(
-                model=model, x=x, y=y, optimizer=optimizer, loss_fn=loss_fn
-            )
-            losses.append(loss)
+    
+    for x, y in loader:
+        loss = train_batch(
+            model=model, x=x, y=y, optimizer=optimizer, loss_fn=loss_fn
+        )
+        
+        losses.append(loss)            
+        batch_index += 1
 
-            batch_index += 1
-
-        if e % 50 == 0:
-            pass
+    # if e % 50 == 0:
+        # pass
         #   ic("Epoch: ", e+1)
         #   ic("Batches: ", batch_index)
 
-    return losses
+    return sum(losses) / len(losses)
 
 
 # %% [markdown]
@@ -248,25 +254,34 @@ def test_batch(model, x, y):
     # run forward calculation
     y_predict = model.forward(x)
 
-    return y, y_predict
+    correct = (y_predict == y).sum().item()
+    total = y.size(0)
+
+    return y, y_predict, correct, total
 
 
 def test(model, loader):
     y_vectors = list()
     y_predict_vectors = list()
 
+    correct = 0
+    total = 0
+
     batch_index = 0
     for x, y in loader:
-        y, y_predict = test_batch(model=model, x=x, y=y)
+        y, y_predict, batch_correct, batch_total = test_batch(model=model, x=x, y=y)
 
         y_vectors.append(y.data.numpy())
         y_predict_vectors.append(y_predict.data.numpy())
 
         batch_index += 1
 
+        correct += batch_correct
+        total += batch_total
+
     y_predict_vector = np.concatenate(y_predict_vectors)
 
-    return y_predict_vector
+    return y_predict_vector, (correct/total)
 
 
 # %% [markdown]
@@ -299,22 +314,24 @@ def plot_loss(losses, title: str, show=True):
 
 # %%
 class GaitModel(nn.Module):
-    def __init__(self, layer_sizes, avgs_key, batch_norm=True, dropout=0):
+    def __init__(self, layer_sizes, config):
         super(GaitModel, self).__init__()
-        self.avgs = torch.FloatTensor(avgs[avgs_key])
+        self.avgs = torch.FloatTensor(avgs[AVGS_KEY])
         hidden_layers = []
 
+      
         for nl, nlminus1 in zip(layer_sizes[1:-1], layer_sizes):
             layers = [nn.Linear(nlminus1, nl), nn.ReLU()]
-            if batch_norm:
+            if config["batch_norm"]:
                 layers.append(nn.BatchNorm1d(nl))
             
-            if dropout > 0:
-                layers.append(nn.Dropout(dropout))
+            # if config["dropout_rate"] > 0.0:
+            layers.append(nn.Dropout(config["dropout_rate"]))
             
 
             hidden_layers.append(nn.Sequential(*layers))
 
+        # random comment for git testing
 
         # The output layer does not include an activation function.
         # See: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
@@ -349,7 +366,7 @@ class GaitModel(nn.Module):
 # ## Define Run function
 
 # %%
-def run(train_dataset, test_dataset, avgs_key, epochs=4, layer_sizes=[33, 31, 30, 28], batch_norm=True, dropout=0):
+def run(config, train_dataset, test_dataset, avgs_key, layer_sizes=[33, 31, 30, 28]):
     # Batch size is the number of training examples used to calculate each iteration's gradient
     batch_size_train = 33
 
@@ -361,9 +378,11 @@ def run(train_dataset, test_dataset, avgs_key, epochs=4, layer_sizes=[33, 31, 30
     )
 
     # Define the hyperparameters
-    learning_rate = 1e-3
+    learning_rate = config['lr']
 
-    pytorch_model = GaitModel(layer_sizes, avgs_key, batch_norm, dropout)
+    AVGS_KEY = avgs_key
+
+    pytorch_model = GaitModel(layer_sizes, config)
 
     # Initialize the optimizer with above parameters
     optimizer = optim.Adam(pytorch_model.parameters(), lr=learning_rate)
@@ -371,14 +390,14 @@ def run(train_dataset, test_dataset, avgs_key, epochs=4, layer_sizes=[33, 31, 30
     # Define the loss function
     loss_fn = nn.MSELoss()  # mean squared error
 
-    # Train and get the resulting loss per iteration
-    loss = train(
-        model=pytorch_model,
-        loader=data_loader_train,
-        optimizer=optimizer,
-        loss_fn=loss_fn,
-        epochs=epochs,
-    )
+    for i in range(epochs=config["epochs"]):
+        # Train and get the resulting loss per iteration
+        loss = train(
+            model=pytorch_model,
+            loader=data_loader_train,
+            optimizer=optimizer,
+            loss_fn=loss_fn,
+        )
 
     # Test and get the resulting predicted y values
     y_predict = test(model=pytorch_model, loader=data_loader_test)
@@ -391,15 +410,20 @@ def run(train_dataset, test_dataset, avgs_key, epochs=4, layer_sizes=[33, 31, 30
 
 # %%
 angles_path = Path("Data")
-names_and_ds = []
+names_conf_ds = []
 
 for filename in angles_path.glob("*_kinematic.csv"):
 
     gait_name = filename.stem.split("_")[0]
-    train_ds, test_ds = create_datasets(filename)
-    names_and_ds.append((gait_name, train_ds, test_ds))
 
-print(names_and_ds)
+    f = open(TMP_PATH / f"{gait_name}_best_config.json")
+    config  = json.load(f)
+
+    ds = create_datasets(DATA_PATH / f'{gait_name}_kinematic.csv', nosplit=True)
+
+    names_conf_ds.append((gait_name, config, ds))
+
+print(names_conf_ds)
 
 
 # %% [markdown]
@@ -410,24 +434,14 @@ def train_csv_plot(names_and_ds, model_path=MODEL_PATH, csv_path=DATA_PATH, plot
 
     final_losses = []
 
-    for name, train_ds, test_ds in names_and_ds:
+    for name, config, ds in names_and_ds:
         print(name)
 
-        train_ds.x_data.shape
-
-        losses, y_predict, model_to_save = run(
-            train_dataset=train_ds, test_dataset=test_ds, avgs_key=name, epochs=400, dropout=dropout, batch_norm=batch_norm
+        losses, y_predict, model_to_save = run(config,
+            train_dataset=ds, test_dataset=ds, avgs_key=name,
         )
 
-
-        # new /
-        all_ds = create_datasets(DATA_PATH / f'{name}_kinematic.csv', nosplit=True)
-
-
-        data_loader_all = DataLoader(
-            dataset=all_ds, batch_size=33, shuffle=False
-        )
-        y_predict = test(model_to_save, data_loader_all)
+        y_predict = test(model_to_save, ds)
 
         spacer = "_" if extra_id != "" else ""
 
@@ -456,7 +470,7 @@ def train_csv_plot(names_and_ds, model_path=MODEL_PATH, csv_path=DATA_PATH, plot
 
         
 
-train_csv_plot(names_and_ds)
+train_csv_plot(names_conf_ds)
 
 # %% [markdown]
 # ## Sanity Check Data By Plotting
@@ -551,15 +565,15 @@ def plot_comparisons(data_files, model_outputs, save_path, extra_id:str = None):
 # %%
 configs = [("bothoff", False, 0), ("onlydrop", False, 0.5), ("bothon", True, 0.5), ("onlybatch", True, 0)]
 
-tmp_path = Path("TMP/")
+
 
 names_and_ds = []
 
 for filename in DATA_PATH.glob("*_kinematic.csv"):
 
     gait_name = filename.stem.split("_")[0]
-    train_ds, test_ds = create_datasets(filename)
-    names_and_ds.append((gait_name, train_ds, test_ds))
+    ds = create_datasets(filename, nosplit=True)
+    names_and_ds.append((gait_name, ds, ds))
 
 min_loss = inf
 best_config = None
@@ -585,6 +599,122 @@ for config, batch, drop in configs:
 
 # %%
 print(best_config)
+
+# %% [markdown]
+# # Hyperparameter Tuning
+# We'll use Ray for this and are using the search space below
+
+# %%
+search_space = {
+
+    "lr": tune.sample_from(lambda spec: 10**(-10 * np.random.rand())),
+    "momentum": tune.uniform(0.1, 0.9),
+    "batch_norm": tune.choice([True, False]),
+    "dropout_rate": tune.uniform(0.0, 0.6),
+    "epochs": tune.randint(5, 1000),
+    "hidden_layers": tune.choice([1, 2, 3, 5, 10, 20, 50]),
+    "min_layers": tune.choice([2, 28]),
+    "max_layers": tune.choice([0, 33, 50])
+
+}
+
+
+# %% [markdown]
+# ### New Run Function
+#
+
+# %%
+DATASET = create_datasets(DATA_PATH / f'canter_kinematic.csv', nosplit=True)
+AVGS_KEY = "canter"
+
+
+# %%
+def run_ray(config):
+    # epochs=4, layer_sizes=[33, 31, 30, 28], batch_norm=True, dropout=0):
+    # Batch size is the number of training examples used to calculate each iteration's gradient
+    batch_size_train = 33
+
+    data_loader_train = DataLoader(
+        dataset=DATASET, batch_size=batch_size_train, shuffle=True
+    )
+    data_loader_test = DataLoader(
+        dataset=DATASET, batch_size=len(DATASET), shuffle=False
+    )
+
+    # Define the hyperparameters
+    learning_rate = config["lr"]
+    
+
+    # randomly decides on a bunch of layers depending on the search space decision
+    # layer_sizes = [batch_size_train]
+    # for _ in range(config["hidden_layers"]):
+    #     min = config["min_layers"]
+    #     max = config["max_layers"] if config["max_layers"] != 0 else layer_sizes[-1]
+    #     layer_sizes.append(random.randint(min, max))
+
+    # layer_sizes.append(28) #hard coded bc it's exactly the number we'll always need
+
+
+    layer_sizes=[33, 31, 30, 28]
+
+    pytorch_model = GaitModel(layer_sizes, config)
+
+    # Initialize the optimizer with above parameters
+    optimizer = optim.Adam(pytorch_model.parameters(), lr=learning_rate)
+
+    # Define the loss function
+    loss_fn = nn.MSELoss()  # mean squared error
+
+    for i in range(config["epochs"]):
+        # Train and get the resulting loss per iteration
+        loss = train(
+            model=pytorch_model,
+            loader=data_loader_train,
+            optimizer=optimizer,
+            loss_fn=loss_fn,
+            config=config,
+        )
+
+
+        # Test and get the resulting predicted y values
+        y_predict, acc = test(model=pytorch_model, loader=data_loader_test)
+        tune.report(acc=acc)
+
+    return loss
+
+# %%
+# %%capture
+gaits = ["canter", "gallop", "trot", "walk"]
+
+for gait in gaits:
+
+    AVGS_KEY = gait
+
+    DATASET = create_datasets(DATA_PATH / f'{gait}_kinematic.csv', nosplit=True)
+
+    # analysis = tune.run(run_ray, num_samples=20, scheduler=ASHAScheduler(metric="acc", mode="max"),config=search_space)
+
+    analysis = tune.run(run_ray, num_samples = 20, config=search_space)
+
+
+    best_config = analysis.get_best_config(metric="acc", mode="max")
+    json_config = json.dumps(best_config)
+
+    with open(TMP_PATH / f'{gait}_best_config.json', 'w') as outfile:
+        outfile.write(json_config)
+
+
+# %%
+
+
+
+
+
+
+
+# %% [markdown]
+# # Convert to .Py File
+# Reminder to do this every time the notebook is run
 
 # %%
 # !jupytext --set-formats ipynb,py:percent gait_model.ipynb

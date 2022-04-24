@@ -1,1 +1,1 @@
-{"lr": 0.1981233149514445, "momentum": 0.6172752912379695, "batch_norm": false, "dropout_rate": 0.5155892453915226, "epochs": 586, "hidden_layers": 20, "min_layers": 2, "max_layers": 33}
+{"lr": 0.07562329966776266, "momentum": 0.2740067632362447, "batch_norm": true, "dropout_rate": 0.59104418584669, "epochs": 240, "hidden_layers": 1, "min_layers": 2, "max_layers": 33}
