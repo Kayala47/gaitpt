@@ -1,0 +1,10 @@
+matplotlib
+numpy
+pytorch
+icecream
+pandas
+math
+glob
+csv
+pathlib
+json
