@@ -363,7 +363,7 @@ class GaitModel(nn.Module):
 
 
 # %% [markdown]
-# ## Define Run function
+# ## Define Final Run function
 
 # %%
 def run(config, train_dataset, test_dataset, avgs_key, layer_sizes=[33, 31, 30, 28]):
@@ -390,7 +390,7 @@ def run(config, train_dataset, test_dataset, avgs_key, layer_sizes=[33, 31, 30, 
     # Define the loss function
     loss_fn = nn.MSELoss()  # mean squared error
 
-    for i in range(epochs=config["epochs"]):
+    for i in range(0, epochs=config["epochs"]):
         # Train and get the resulting loss per iteration
         loss = train(
             model=pytorch_model,
@@ -430,11 +430,11 @@ print(names_conf_ds)
 # ## Run and plot results
 
 # %%
-def train_csv_plot(names_and_ds, model_path=MODEL_PATH, csv_path=DATA_PATH, plot=True, dropout=0, batch_norm=True, extra_id: str = ""):
+def train_csv_plot(names_conf_ds, model_path=MODEL_PATH, csv_path=DATA_PATH):
 
     final_losses = []
 
-    for name, config, ds in names_and_ds:
+    for name, config, ds in names_conf_ds:
         print(name)
 
         losses, y_predict, model_to_save = run(config,
@@ -443,11 +443,7 @@ def train_csv_plot(names_and_ds, model_path=MODEL_PATH, csv_path=DATA_PATH, plot
 
         y_predict = test(model_to_save, ds)
 
-        spacer = "_" if extra_id != "" else ""
-
-        # / new
-        # Save the outputs to a csv for quicker comparisons later
-        with open(csv_path / f'{name}_model{spacer}{extra_id}.csv', "w", newline="") as f:
+        with open(csv_path / f'{name}_model.csv', "w", newline="") as f:
             writer = csv.writer(
                 f,
                 quoting=csv.QUOTE_NONE,
@@ -457,14 +453,14 @@ def train_csv_plot(names_and_ds, model_path=MODEL_PATH, csv_path=DATA_PATH, plot
             for row in y_predict:
                 writer.writerow(row)
 
-        torch.save(model_to_save, model_path / f"{name}_model{spacer}{extra_id}.pt")
+        torch.save(model_to_save, model_path / f"{name}_model.pt")
 
         final_loss = sum(losses[-100:])/100
         final_losses.append(final_loss)
 
         print(f"Final loss for {name}: {final_loss}")
-        if plot:
-            plot_loss(losses, name)
+        
+        plot_loss(losses, name)
 
     return sum(final_losses)/len(final_losses)
 
@@ -601,7 +597,7 @@ for config, batch, drop in configs:
 print(best_config)
 
 # %% [markdown]
-# # Hyperparameter Tuning
+# ## Hyperparameter Tuning
 # We'll use Ray for this and are using the search space below
 
 # %%
