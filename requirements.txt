@@ -1,9 +1,6 @@
 matplotlib
 numpy
-pytorch
+torch
 icecream
 pandas
-glob
-csv
-pathlib
-json
+glob2
