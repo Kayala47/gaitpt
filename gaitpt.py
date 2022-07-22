@@ -28,10 +28,12 @@ def clip(val: float, lo: float, hi: float) -> float:
 
 
 def deg(deg: float) -> float:
+    # turns a degree value into simplified radians
     return rad(radians(deg))
 
 
 def rad(rad: float) -> float:
+    # simplifies radian value
     rad = rad % (2 * pi)
     return rad if rad < pi else rad - 2 * pi
 
@@ -52,7 +54,7 @@ class Point:
 
     @property
     def norm(self) -> float:
-        return sqrt(self.x**2 + self.y**2)
+        return sqrt(self.x ** 2 + self.y ** 2)
 
     def __add__(self, rhs) -> Point:
         return Point(x=self.x + rhs.x, y=self.y + rhs.y)
@@ -344,7 +346,7 @@ class Animat:
         for leg in self.legs:
             # frame.append(leg.global_joint_poses()[1])
             angles = leg.get_angles()
-            angles = np.array(interweave_lists(angles, np.zeros(len(angles)))).flatten()
+            angles = np.array(interweave_lists(np.zeros(len(angles)), angles)).flatten()
             angle_frame = np.append(angle_frame, angles)
 
             if leg.get_lowest_pt() <= self.ground:
@@ -390,7 +392,7 @@ class Animat:
                 # frame.append(leg.global_joint_poses()[1])
                 angles = leg.get_angles()
                 angles = np.array(
-                    interweave_lists(angles, np.zeros(len(angles)))
+                    interweave_lists(np.zeros(len(angles)), angles)
                 ).flatten()
                 angle_frame = np.append(angle_frame, angles)
 
@@ -412,7 +414,7 @@ class Animat:
 
         animation.save(ANIMATIONS_PATH / f"{gait_name}_procedural.gif")
 
-        save_data(save_frames_angles, DATA_PATH / f"{gait_name}.csv")
+        save_data(save_frames_angles, DATA_PATH / f"{gait_name}_kinematic.csv")
 
     def split_pts(self, pts: List[Point]) -> Tuple[List[float], List[float]]:
         # helper function, since we can update an actor with all x and y coordinates in this format
