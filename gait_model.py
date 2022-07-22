@@ -29,6 +29,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
 import torch
 import torch.nn as nn
+from typing import Tuple, List
 
 # %% [markdown]
 # ## Define a pytorch Dataset object to contain the training and testing data
@@ -67,7 +68,7 @@ class AngleDataset(Dataset):
         self.y_data: torch.Tensor = torch.tensor(y_data).type(torch.float32)
         self.length: int = len(self.x_data)
 
-    def __getitem__(self, index) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.x_data[index], self.y_data[index]
 
     def __len__(self) -> int:
@@ -128,7 +129,7 @@ def train_loop(
     optimizer: optim.Optimizer,
     critera: nn.Module,
     num_epochs: int,
-) -> list[float]:
+) -> List[float]:
     """Train the model.
 
     Args:
@@ -188,7 +189,7 @@ def inference(model: nn.Module, dataset: AngleDataset) -> torch.Tensor:
 
 # %%
 class GaitModel(nn.Module):
-    def __init__(self, layer_sizes: list[int], batch_norm: bool, dropout: float):
+    def __init__(self, layer_sizes: List[int], batch_norm: bool, dropout: float):
         """A PyTorch model trained to output new joint angles.
 
         Args:
@@ -234,10 +235,10 @@ def train(
     num_epochs: int,
     batch_size: int,
     learning_rate: float,
-    layer_sizes: list[int],
+    layer_sizes: List[int],
     batch_norm: bool,
     dropout: float,
-) -> tuple[nn.Module, list[float]]:
+) -> Tuple[nn.Module, List[float]]:
     """Train a model on the given dataset.
 
     Args:
