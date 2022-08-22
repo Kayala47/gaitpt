@@ -8,10 +8,12 @@ from dataclasses import dataclass
 from itertools import accumulate
 from math import atan2, cos, degrees, inf, pi, radians, sin, sqrt
 from typing import Iterable, List, Tuple
+import random
 
 import matplotlib.pyplot as plt
 import numpy as np
-from icecream import ic
+
+# from icecream import ic
 from IPython.display import HTML
 from loguru import logger
 from matplotlib.animation import FuncAnimation
@@ -333,15 +335,16 @@ class Animat:
             ]
         ]
 
+        # save_frames_angles = []
+
         torso = [0.0, 0.0, 0.0, 0.0]  # two connections, 2 DOF each
 
-        touch_sensors = [
-            1.0 if (leg.get_lowest_pt() <= self.ground) else 0.0 for leg in self.legs
-        ]
+        # touch_sensors = [random.random() for leg in self.legs]
+        touch_sensors = []
 
         # TODO: get this section into a fx, since it gets re-used /*
         angle_frame = []
-        touch_sensors = []
+        # touch_sensors = []
 
         for leg in self.legs:
             # frame.append(leg.global_joint_poses()[1])
@@ -349,16 +352,17 @@ class Animat:
             angles = np.array(interweave_lists(np.zeros(len(angles)), angles)).flatten()
             angle_frame = np.append(angle_frame, angles)
 
-            if leg.get_lowest_pt() <= self.ground:
-                touch_sensors.append(1.0)
-            else:
-                touch_sensors.append(0.0)
+            # if leg.get_lowest_pt() <= self.ground:
+            #     touch_sensors.append(1.0)
+            # else:
+            #     touch_sensors.append(0.0)
+            touch_sensors.append(random.random())
 
         angle_frame = np.append(angle_frame, torso)
         angle_frame = np.append(angle_frame, touch_sensors)
 
         # save_frames.append(frame)
-        save_frames_angles.append(angle_frame)
+        save_frames_angles = np.append(save_frames_angles, angle_frame)
         # */
 
         # Compute joint angles for each point along the path
@@ -396,10 +400,11 @@ class Animat:
                 ).flatten()
                 angle_frame = np.append(angle_frame, angles)
 
-                if leg.get_lowest_pt() <= self.ground + 0.05:
-                    touch_sensors.append(1.0)
-                else:
-                    touch_sensors.append(0.0)
+                # if leg.get_lowest_pt() <= self.ground + 0.05:
+                #     touch_sensors.append(1.0)
+                # else:
+                #     touch_sensors.append(0.0)
+                touch_sensors.append(random.random())
 
             angle_frame = np.append(angle_frame, torso)
             angle_frame = np.append(angle_frame, touch_sensors)
@@ -632,10 +637,7 @@ def save_data(data: List[List[List[Pose]]], filename: str):
     # writes data to file
 
     with open(filename, "w", newline="") as f:
-        writer = csv.writer(
-            f,
-            quoting=csv.QUOTE_NONE,
-        )
+        writer = csv.writer(f, quoting=csv.QUOTE_NONE)
 
         data = np.asarray(data)
         data = data.flatten()
@@ -645,6 +647,7 @@ def save_data(data: List[List[List[Pose]]], filename: str):
             if len(one_row) < 32:
                 one_row.append(num)
             else:
+                # print(one_row)
                 writer.writerow(one_row)
                 one_row = [num]
 
