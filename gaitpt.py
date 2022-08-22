@@ -337,7 +337,8 @@ class Animat:
 
         # save_frames_angles = []
 
-        torso = [0.0, 0.0, 0.0, 0.0]  # two connections, 2 DOF each
+        # torso = [0.0, 0.0, 0.0, 0.0]  # two connections, 2 DOF each
+        torso = [random.random(), random.random(), random.random(), random.random()]
 
         # touch_sensors = [random.random() for leg in self.legs]
         touch_sensors = []
@@ -390,7 +391,8 @@ class Animat:
             # frame = []
             angle_frame = []
             touch_sensors = []
-            torso = [0.0, 0.0, 0.0, 0.0]  # two connections, 2 DOF each
+            # torso = [0.0, 0.0, 0.0, 0.0]  # two connections, 2 DOF each
+            torso = [random.random(), random.random(), random.random(), random.random()]
 
             for leg in self.legs:
                 # frame.append(leg.global_joint_poses()[1])
